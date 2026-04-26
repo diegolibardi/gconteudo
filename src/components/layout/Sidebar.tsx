@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   LayoutDashboard,
-  Library,
   Calendar,
   Settings,
   LogOut,
@@ -15,7 +14,6 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard",     label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/biblioteca",    label: "Biblioteca",    icon: Library         },
   { href: "/calendario",    label: "Calendário",    icon: Calendar        },
   { href: "/configuracoes", label: "Configurações", icon: Settings        },
 ];

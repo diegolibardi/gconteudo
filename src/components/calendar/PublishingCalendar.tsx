@@ -16,13 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format as fmtDate } from "date-fns";
-import { useContents, useUpdateContent } from "@/hooks/useContent";
-import { CalendarClock, CheckCircle2, Loader2 } from "lucide-react";
-import { toast } from "@/hooks/useToast";
+import { useCreateContent, useUpdateContent, useDeleteContent } from "@/hooks/useContent";
+import { ContentForm } from "@/components/content/ContentForm";
+import { Pencil, Trash2 } from "lucide-react";
 
 const locales = { "pt-BR": ptBR };
 
@@ -52,14 +49,22 @@ interface PublishingCalendarProps {
 }
 
 export function PublishingCalendar({ contents }: PublishingCalendarProps) {
-  const [selected, setSelected] = useState<ContentItem | null>(null);
-  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleContentId, setScheduleContentId] = useState("");
-  const [scheduleSuccess, setScheduleSuccess] = useState(false);
+  // Dialog: novo conteúdo
+  const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [newDefaultDate, setNewDefaultDate] = useState("");
 
-  const { data: drafts } = useContents({ status: "draft" });
+  // Dialog: detalhes do evento
+  const [selected, setSelected] = useState<ContentItem | null>(null);
+
+  // Dialog: editar evento
+  const [editItem, setEditItem] = useState<ContentItem | null>(null);
+
+  // Dialog: confirmar exclusão
+  const [deleteItem, setDeleteItem] = useState<ContentItem | null>(null);
+
+  const createContent = useCreateContent();
   const updateContent = useUpdateContent();
+  const deleteContent = useDeleteContent();
 
   const events: CalendarEvent[] = useMemo(() => {
     return contents
@@ -89,33 +94,28 @@ export function PublishingCalendar({ contents }: PublishingCalendarProps) {
   };
 
   function handleSelectSlot({ start }: { start: Date }) {
-    const dateStr = fmtDate(start, "yyyy-MM-dd'T'HH:mm");
-    setScheduleDate(dateStr);
-    setScheduleContentId("");
-    setScheduleSuccess(false);
-    setScheduleDialogOpen(true);
+    setNewDefaultDate(fmtDate(start, "yyyy-MM-dd'T'HH:mm"));
+    setNewDialogOpen(true);
   }
 
-  async function handleSchedule(e: React.FormEvent) {
-    e.preventDefault();
-    if (!scheduleContentId || !scheduleDate) return;
-    try {
-      await updateContent.mutateAsync({
-        id: scheduleContentId,
-        status: "scheduled",
-        scheduledAt: scheduleDate,
-      });
-      setScheduleSuccess(true);
-      setTimeout(() => {
-        setScheduleDialogOpen(false);
-        setScheduleSuccess(false);
-      }, 1500);
-    } catch {
-      toast({ title: "Erro ao agendar", variant: "destructive" });
-    }
+  async function handleCreate(data: Partial<ContentItem>) {
+    await createContent.mutateAsync(data);
+    setNewDialogOpen(false);
   }
 
-  const selectedDraft = drafts?.find((c) => c.id === scheduleContentId);
+  async function handleUpdate(data: Partial<ContentItem>) {
+    if (!editItem) return;
+    await updateContent.mutateAsync({ id: editItem.id, ...data });
+    setEditItem(null);
+    setSelected(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteItem) return;
+    await deleteContent.mutateAsync(deleteItem.id);
+    setDeleteItem(null);
+    setSelected(null);
+  }
 
   return (
     <>
@@ -144,94 +144,26 @@ export function PublishingCalendar({ contents }: PublishingCalendarProps) {
         />
       </div>
 
-      {/* Dialog: agendar ao clicar no dia */}
-      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
-        <DialogContent className="max-w-md">
+      {/* Dialog: Novo conteúdo (clique no dia) */}
+      <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarClock className="w-5 h-5 text-violet-600" />
-              Agendar Publicação
-            </DialogTitle>
+            <DialogTitle>Nova Publicação</DialogTitle>
             <DialogDescription>
-              Selecione um conteúdo e confirme a data e hora.
+              Preencha os dados e agende a publicação.
             </DialogDescription>
           </DialogHeader>
-
-          {scheduleSuccess ? (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-700">
-              <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <span className="text-sm font-medium">Publicação agendada com sucesso!</span>
-            </div>
-          ) : (
-            <form onSubmit={handleSchedule} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Conteúdo (rascunhos disponíveis)</Label>
-                <Select value={scheduleContentId} onValueChange={setScheduleContentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um conteúdo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!drafts?.length ? (
-                      <div className="px-2 py-3 text-sm text-gray-400 text-center">
-                        Nenhum rascunho disponível
-                      </div>
-                    ) : (
-                      drafts.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.title}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedDraft && (
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 space-y-1">
-                  <p className="text-sm font-medium text-gray-900">{selectedDraft.title}</p>
-                  <p className="text-xs text-gray-500 line-clamp-2">{selectedDraft.caption}</p>
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {selectedDraft.platforms.map((p) => {
-                      const plt = PLATFORMS.find((x) => x.id === p);
-                      return plt ? (
-                        <span key={p} className={`px-2 py-0.5 rounded-full text-xs font-semibold text-white ${plt.color}`}>
-                          {plt.label}
-                        </span>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="scheduleDate">Data e hora</Label>
-                <Input
-                  id="scheduleDate"
-                  type="datetime-local"
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!scheduleContentId || !scheduleDate || updateContent.isPending}
-              >
-                {updateContent.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Agendando...</>
-                ) : (
-                  <><CalendarClock className="w-4 h-4 mr-2" />Agendar Publicação</>
-                )}
-              </Button>
-            </form>
-          )}
+          <ContentForm
+            defaultScheduledAt={newDefaultDate}
+            onSubmit={handleCreate}
+            onCancel={() => setNewDialogOpen(false)}
+            loading={createContent.isPending}
+          />
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: detalhe do evento */}
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
+      {/* Dialog: Detalhes do evento */}
+      <Dialog open={!!selected && !editItem} onOpenChange={() => setSelected(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{selected?.title}</DialogTitle>
@@ -240,6 +172,7 @@ export function PublishingCalendar({ contents }: PublishingCalendarProps) {
                 fmtDate(new Date(selected.scheduledAt), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
             </DialogDescription>
           </DialogHeader>
+
           {selected && (
             <div className="space-y-3">
               <div>
@@ -255,18 +188,28 @@ export function PublishingCalendar({ contents }: PublishingCalendarProps) {
                   })}
                 </div>
               </div>
+
               <div>
                 <p className="text-xs font-medium text-gray-500 mb-1">Status</p>
                 <Badge variant={selected.status as "draft" | "scheduled" | "published"}>
                   {selected.status === "draft" ? "Rascunho" : selected.status === "scheduled" ? "Agendado" : "Publicado"}
                 </Badge>
               </div>
+
               {selected.caption && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-1">Legenda</p>
                   <p className="text-sm text-gray-700 leading-relaxed">{selected.caption}</p>
                 </div>
               )}
+
+              {selected.script && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-1">Roteiro</p>
+                  <p className="text-sm text-gray-700 leading-relaxed">{selected.script}</p>
+                </div>
+              )}
+
               {selected.tags?.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-1">Tags</p>
@@ -277,8 +220,68 @@ export function PublishingCalendar({ contents }: PublishingCalendarProps) {
                   </div>
                 </div>
               )}
+
+              <div className="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => setEditItem(selected)}
+                >
+                  <Pencil className="w-4 h-4" /> Editar
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 gap-2"
+                  onClick={() => setDeleteItem(selected)}
+                >
+                  <Trash2 className="w-4 h-4" /> Excluir
+                </Button>
+              </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar evento */}
+      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Publicação</DialogTitle>
+            <DialogDescription>Atualize os dados da publicação.</DialogDescription>
+          </DialogHeader>
+          {editItem && (
+            <ContentForm
+              initial={editItem}
+              onSubmit={handleUpdate}
+              onCancel={() => setEditItem(null)}
+              loading={updateContent.isPending}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar exclusão */}
+      <Dialog open={!!deleteItem} onOpenChange={() => setDeleteItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir publicação?</DialogTitle>
+            <DialogDescription>
+              "{deleteItem?.title}" será removida permanentemente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setDeleteItem(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={handleDelete}
+              disabled={deleteContent.isPending}
+            >
+              {deleteContent.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

@@ -1,40 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { ContentItem, Platform, ContentStatus } from "@/types";
-import { PLATFORMS, STATUSES } from "@/lib/constants";
+import { useState } from "react";
+import { ContentItem, Platform } from "@/types";
+import { PLATFORMS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, Plus } from "lucide-react";
 
 interface ContentFormProps {
   initial?: Partial<ContentItem>;
+  defaultScheduledAt?: string; // pré-preenche data vinda do clique no calendário
   onSubmit: (data: Partial<ContentItem>) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
 }
 
-export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFormProps) {
+export function ContentForm({ initial, defaultScheduledAt, onSubmit, onCancel, loading }: ContentFormProps) {
   const [title, setTitle] = useState(initial?.title || "");
   const [script, setScript] = useState(initial?.script || "");
   const [caption, setCaption] = useState(initial?.caption || "");
   const [platforms, setPlatforms] = useState<Platform[]>(initial?.platforms || []);
-  const [status, setStatus] = useState<ContentStatus>(initial?.status || "draft");
   const [scheduledAt, setScheduledAt] = useState(
-    initial?.scheduledAt ? new Date(initial.scheduledAt).toISOString().slice(0, 16) : ""
+    initial?.scheduledAt
+      ? new Date(initial.scheduledAt).toISOString().slice(0, 16)
+      : defaultScheduledAt || ""
   );
   const [tags, setTags] = useState<string[]>(initial?.tags || []);
   const [tagInput, setTagInput] = useState("");
   const [mediaUrls, setMediaUrls] = useState<string[]>(initial?.mediaUrls || []);
   const [mediaInput, setMediaInput] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (status !== "scheduled") setScheduledAt("");
-  }, [status]);
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -44,17 +41,13 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
 
   function addTag() {
     const t = tagInput.trim();
-    if (t && !tags.includes(t)) {
-      setTags([...tags, t]);
-    }
+    if (t && !tags.includes(t)) setTags([...tags, t]);
     setTagInput("");
   }
 
   function addMedia() {
     const u = mediaInput.trim();
-    if (u && !mediaUrls.includes(u)) {
-      setMediaUrls([...mediaUrls, u]);
-    }
+    if (u && !mediaUrls.includes(u)) setMediaUrls([...mediaUrls, u]);
     setMediaInput("");
   }
 
@@ -65,7 +58,7 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
     if (!title.trim()) { setError("Título é obrigatório."); return; }
     if (!caption.trim()) { setError("Legenda é obrigatória."); return; }
     if (platforms.length === 0) { setError("Selecione ao menos uma plataforma."); return; }
-    if (status === "scheduled" && !scheduledAt) { setError("Defina a data/hora de agendamento."); return; }
+    if (!scheduledAt) { setError("Defina a data e hora de publicação."); return; }
 
     try {
       await onSubmit({
@@ -73,7 +66,7 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
         script: script.trim() || undefined,
         caption: caption.trim(),
         platforms,
-        status,
+        status: "scheduled",
         scheduledAt: scheduledAt || null,
         tags,
         mediaUrls,
@@ -105,7 +98,7 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
           placeholder="Digite o roteiro do vídeo ou post..."
           value={script}
           onChange={(e) => setScript(e.target.value)}
-          className="min-h-[120px]"
+          className="min-h-[100px]"
         />
       </div>
 
@@ -145,34 +138,16 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
         </div>
       </div>
 
-      {/* Status */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label>Status</Label>
-          <Select value={status} onValueChange={(v) => setStatus(v as ContentStatus)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUSES.map(({ id, label }) => (
-                <SelectItem key={id} value={id}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {status === "scheduled" && (
-          <div className="space-y-1.5">
-            <Label htmlFor="scheduledAt">Data e hora</Label>
-            <Input
-              id="scheduledAt"
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              min={new Date().toISOString().slice(0, 16)}
-            />
-          </div>
-        )}
+      {/* Date/time — sempre visível */}
+      <div className="space-y-1.5">
+        <Label htmlFor="scheduledAt">Data e hora de publicação <span className="text-red-500">*</span></Label>
+        <Input
+          id="scheduledAt"
+          type="datetime-local"
+          value={scheduledAt}
+          onChange={(e) => setScheduledAt(e.target.value)}
+          required
+        />
       </div>
 
       {/* Tags */}
@@ -240,7 +215,7 @@ export function ContentForm({ initial, onSubmit, onCancel, loading }: ContentFor
           Cancelar
         </Button>
         <Button type="submit" disabled={loading} className="flex-1">
-          {loading ? "Salvando..." : initial?.id ? "Atualizar" : "Criar"}
+          {loading ? "Salvando..." : initial?.id ? "Atualizar" : "Agendar"}
         </Button>
       </div>
     </form>
