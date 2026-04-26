@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes --project-name \"content-management\")",
+      "Bash(npx create-next-app@latest \"C:/Apps/content-management-temp\" --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --yes)",
+      "Bash(npx prisma:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const { PrismaBetterSQLite } = require\\('@prisma/adapter-better-sqlite3'\\); console.log\\('ok'\\)\")",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
