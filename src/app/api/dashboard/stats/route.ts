@@ -9,15 +9,24 @@ export async function GET() {
     return NextResponse.json({ error: "Não autorizado." }, { status: 401 });
   }
 
+  const now = new Date();
+
   const contents = await db.content.findMany({
     where: { userId: session.user.id },
     orderBy: { scheduledAt: "asc" },
   });
 
   const total = contents.length;
-  const draft = contents.filter((c) => c.status === "draft").length;
-  const scheduled = contents.filter((c) => c.status === "scheduled").length;
-  const published = contents.filter((c) => c.status === "published").length;
+
+  // Publicado = status "published" OU agendado com data já passada
+  const published = contents.filter(
+    (c) => c.status === "published" || (c.scheduledAt && c.scheduledAt <= now)
+  ).length;
+
+  // Agendado = status "scheduled" com data futura
+  const scheduled = contents.filter(
+    (c) => c.status === "scheduled" && c.scheduledAt && c.scheduledAt > now
+  ).length;
 
   const platformBreakdown: Record<string, number> = {};
   for (const c of contents) {
@@ -27,7 +36,6 @@ export async function GET() {
     }
   }
 
-  const now = new Date();
   const upcomingPosts = contents
     .filter((c) => c.status === "scheduled" && c.scheduledAt && c.scheduledAt > now)
     .slice(0, 5)
@@ -44,7 +52,6 @@ export async function GET() {
 
   return NextResponse.json({
     total,
-    draft,
     scheduled,
     published,
     platformBreakdown,

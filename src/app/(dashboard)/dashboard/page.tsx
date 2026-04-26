@@ -6,26 +6,30 @@ import { StatsCard } from "@/components/dashboard/StatsCard";
 import { UpcomingPosts } from "@/components/dashboard/UpcomingPosts";
 import { PlatformChart } from "@/components/dashboard/PlatformChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FileText,
-  CalendarClock,
-  CheckCircle2,
-  LayoutGrid,
-} from "lucide-react";
+import { CalendarClock, CheckCircle2, LayoutGrid } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+
+  const now = new Date();
 
   const contents = await db.content.findMany({
     where: { userId: session.user.id },
     orderBy: { scheduledAt: "asc" },
   });
 
-  const total     = contents.length;
-  const draft     = contents.filter((c) => c.status === "draft").length;
-  const scheduled = contents.filter((c) => c.status === "scheduled").length;
-  const published = contents.filter((c) => c.status === "published").length;
+  const total = contents.length;
+
+  // Publicado = status "published" OU agendado com data já passada
+  const published = contents.filter(
+    (c) => c.status === "published" || (c.scheduledAt && c.scheduledAt <= now)
+  ).length;
+
+  // Agendado = status "scheduled" com data futura
+  const scheduled = contents.filter(
+    (c) => c.status === "scheduled" && c.scheduledAt && c.scheduledAt > now
+  ).length;
 
   const platformBreakdown: Record<string, number> = {};
   for (const c of contents) {
@@ -35,7 +39,7 @@ export default async function DashboardPage() {
     }
   }
 
-  const now = new Date();
+  // Próximas publicações = agendadas com data futura
   const upcomingPosts = contents
     .filter((c) => c.status === "scheduled" && c.scheduledAt && c.scheduledAt > now)
     .slice(0, 5)
@@ -61,23 +65,15 @@ export default async function DashboardPage() {
         <p className="text-gray-500 text-sm mt-0.5">Aqui está o resumo do seu conteúdo.</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats — 3 cards: Total, Agendados, Publicados */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatsCard
           title="Total de Conteúdos"
           value={total}
           icon={LayoutGrid}
           iconColor="text-violet-600"
           iconBg="bg-violet-100"
-          description="todos os status"
-        />
-        <StatsCard
-          title="Rascunhos"
-          value={draft}
-          icon={FileText}
-          iconColor="text-gray-600"
-          iconBg="bg-gray-100"
-          description="em elaboração"
+          description="todos os registros"
         />
         <StatsCard
           title="Agendados"
@@ -85,7 +81,7 @@ export default async function DashboardPage() {
           icon={CalendarClock}
           iconColor="text-amber-600"
           iconBg="bg-amber-100"
-          description="prontos para publicar"
+          description="publicação futura"
         />
         <StatsCard
           title="Publicados"
@@ -93,7 +89,7 @@ export default async function DashboardPage() {
           icon={CheckCircle2}
           iconColor="text-green-600"
           iconBg="bg-green-100"
-          description="no ar"
+          description="data já passou"
         />
       </div>
 
